@@ -1,0 +1,453 @@
+<!DOCTYPE html>
+<html lang="id">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Dashboard - Absensi Glombang Ahad</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f0f4f8;
+            color: #333;
+        }
+        .navbar {
+            background: linear-gradient(to right, #007bff, #00c4b4);
+            color: white;
+            padding: 15px 20px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            box-shadow: 0 2px 5px rgba(0, 0, 0, 0.1);
+        }
+        .navbar-brand {
+            font-size: 1.8em;
+            font-weight: bold;
+        }
+        .navbar-nav {
+            list-style: none;
+            margin: 0;
+            padding: 0;
+            display: none;
+        }
+        .navbar-nav.active {
+            display: block;
+        }
+        .navbar-nav li {
+            display: inline;
+            margin-left: 20px;
+        }
+        .navbar-nav a {
+            color: white;
+            text-decoration: none;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+        .navbar-nav a:hover {
+            color: #ffeb3b;
+        }
+        .hamburger {
+            cursor: pointer;
+            font-size: 1.8em;
+        }
+        .container {
+            max-width: 1200px;
+            margin: 30px auto;
+            padding: 0 20px;
+        }
+        h1 {
+            text-align: center;
+            color: #007bff;
+            margin-bottom: 30px;
+        }
+        .history-container, .filter-container, .chart-container {
+            background: white;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+            margin-bottom: 30px;
+        }
+        .history-item {
+            margin-bottom: 30px;
+        }
+        .history-item h2, .filter-container h2, .chart-container h2 {
+            background-color: #28a745;
+            color: white;
+            padding: 10px;
+            border-radius: 5px;
+            margin: 0 0 10px 0;
+        }
+        .table-responsive {
+            overflow-x: auto;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 10px;
+        }
+        th, td {
+            border: 1px solid #e0e0e0;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #007bff;
+            color: white;
+        }
+        tr:nth-child(even) {
+            background-color: #f8f9fa;
+        }
+        tr:hover {
+            background-color: #e9ecef;
+        }
+        .button-container {
+            text-align: center;
+            margin-top: 20px;
+        }
+        .button-container button {
+            padding: 12px 25px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #dc3545;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            transition: background-color 0.3s, transform 0.2s;
+        }
+        .button-container button:hover {
+            transform: scale(1.05);
+            opacity: 0.9;
+        }
+        canvas {
+            max-width: 100%;
+            margin: 20px auto;
+            display: block;
+        }
+        @media (max-width: 768px) {
+            .navbar-nav {
+                display: none;
+                flex-direction: column;
+                position: absolute;
+                top: 60px;
+                right: 20px;
+                background: #007bff;
+                padding: 10px;
+                border-radius: 5px;
+            }
+            .navbar-nav.active {
+                display: flex;
+            }
+            .table-responsive {
+                font-size: 14px;
+            }
+            canvas {
+                max-width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <nav class="navbar">
+        <div class="navbar-brand">Admin Dashboard</div>
+        <div class="hamburger" onclick="toggleMenu()">☰</div>
+        <ul class="navbar-nav">
+            <li><a href="index.html">Absensi</a></li>
+            <li><a href="admin.html">Admin Dashboard</a></li>
+        </ul>
+    </nav>
+
+    <div class="container">
+        <h1>Riwayat Absensi Glombang Ahad</h1>
+        <div class="history-container" id="historyContainer">
+            <!-- Riwayat akan diisi oleh JavaScript -->
+        </div>
+        <div class="filter-container">
+            <h2>Individu dengan 3 Kali atau Lebih Tidak Hadir Tanpa Keterangan</h2>
+            <div class="table-responsive" id="filterTable">
+                <!-- Tabel filter akan diisi oleh JavaScript -->
+            </div>
+        </div>
+        <div class="chart-container">
+            <h2>Grafik Absensi</h2>
+            <h3>Sering Izin</h3>
+            <canvas id="izinChart"></canvas>
+            <h3>Sering Tidak Hadir Tanpa Keterangan</h3>
+            <canvas id="tanpaKeteranganChart"></canvas>
+        </div>
+        <div class="button-container">
+            <button onclick="clearHistory()">Hapus Semua Riwayat</button>
+        </div>
+    </div>
+
+    <!-- CDN untuk Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.3/dist/chart.umd.min.js"></script>
+    <script>
+        function toggleMenu() {
+            const nav = document.querySelector('.navbar-nav');
+            nav.classList.toggle('active');
+        }
+
+        function displayHistory() {
+            const historyContainer = document.getElementById('historyContainer');
+            const savedData = JSON.parse(localStorage.getItem('attendanceHistory')) || [];
+            
+            if (savedData.length === 0) {
+                historyContainer.innerHTML = '<p>Tidak ada riwayat absensi.</p>';
+                return;
+            }
+
+            historyContainer.innerHTML = '';
+            savedData.forEach((entry, index) => {
+                const date = new Date(entry.timestamp);
+                const formattedDate = date.toLocaleString('id-ID', {
+                    day: 'numeric',
+                    month: 'long',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                const historyItem = document.createElement('div');
+                historyItem.className = 'history-item';
+                historyItem.innerHTML = `<h2>Riwayat Absensi - ${formattedDate}</h2>`;
+
+                const kelompok = ['karanggayam', 'sidodadi', 'kwagean'];
+                kelompok.forEach(group => {
+                    if (entry.data[group]?.putra?.length > 0) {
+                        const putraTable = document.createElement('div');
+                        putraTable.className = 'table-responsive';
+                        putraTable.innerHTML = `
+                            <h3>Kelompok ${group.charAt(0).toUpperCase() + group.slice(1)} - Putra</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Nama</th>
+                                        <th>Status</th>
+                                        <th>Alasan</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${entry.data[group].putra.map(item => `
+                                        <tr>
+                                            <td>${item.no}</td>
+                                            <td>${item.nama}</td>
+                                            <td>${item.status}</td>
+                                            <td>${item.alasan || '-'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                        historyItem.appendChild(putraTable);
+                    }
+
+                    if (entry.data[group]?.putri?.length > 0) {
+                        const putriTable = document.createElement('div');
+                        putriTable.className = 'table-responsive';
+                        putriTable.innerHTML = `
+                            <h3>Kelompok ${group.charAt(0).toUpperCase() + group.slice(1)} - Putri</h3>
+                            <table>
+                                <thead>
+                                    <tr>
+                                        <th>No</th>
+                                        <th>Nama</th>
+                                        <th>Status</th>
+                                        <th>Alasan</th>
+                                    </tr>
+                                </thead>
+                                <tbody>
+                                    ${entry.data[group].putri.map(item => `
+                                        <tr>
+                                            <td>${item.no}</td>
+                                            <td>${item.nama}</td>
+                                            <td>${item.status}</td>
+                                            <td>${item.alasan || '-'}</td>
+                                        </tr>
+                                    `).join('')}
+                                </tbody>
+                            </table>
+                        `;
+                        historyItem.appendChild(putriTable);
+                    }
+                });
+
+                historyContainer.appendChild(historyItem);
+            });
+        }
+
+        function displayFilterTable() {
+            const filterTable = document.getElementById('filterTable');
+            const savedData = JSON.parse(localStorage.getItem('attendanceHistory')) || [];
+            const tanpaKeteranganCount = {};
+
+            savedData.forEach(entry => {
+                const kelompok = ['karanggayam', 'sidodadi', 'kwagean'];
+                kelompok.forEach(group => {
+                    ['putra', 'putri'].forEach(category => {
+                        entry.data[group]?.[category]?.forEach(item => {
+                            if (item.status === 'Tidak Hadir Tanpa Keterangan') {
+                                const key = `${item.nama} (${group})`;
+                                tanpaKeteranganCount[key] = (tanpaKeteranganCount[key] || 0) + 1;
+                            }
+                        });
+                    });
+                });
+            });
+
+            const filteredData = Object.entries(tanpaKeteranganCount)
+                .filter(([_, count]) => count >= 3)
+                .map(([name, count]) => ({ name, count }));
+
+            if (filteredData.length === 0) {
+                filterTable.innerHTML = '<p>Tidak ada individu dengan 3 kali atau lebih tidak hadir tanpa keterangan.</p>';
+                return;
+            }
+
+            filterTable.innerHTML = `
+                <table>
+                    <thead>
+                        <tr>
+                            <th>No</th>
+                            <th>Nama (Kelompok)</th>
+                            <th>Jumlah Tidak Hadir Tanpa Keterangan</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        ${filteredData.map((item, index) => `
+                            <tr>
+                                <td>${index + 1}</td>
+                                <td>${item.name}</td>
+                                <td>${item.count}</td>
+                            </tr>
+                        `).join('')}
+                    </tbody>
+                </table>
+            `;
+        }
+
+        function displayCharts() {
+            const savedData = JSON.parse(localStorage.getItem('attendanceHistory')) || [];
+            const izinCount = {};
+            const tanpaKeteranganCount = {};
+
+            savedData.forEach(entry => {
+                const kelompok = ['karanggayam', 'sidodadi', 'kwagean'];
+                kelompok.forEach(group => {
+                    ['putra', 'putri'].forEach(category => {
+                        entry.data[group]?.[category]?.forEach(item => {
+                            const key = `${item.nama} (${group})`;
+                            if (item.alasan && item.status.startsWith('Tidak Hadir')) {
+                                izinCount[key] = (izinCount[key] || 0) + 1;
+                            }
+                            if (item.status === 'Tidak Hadir Tanpa Keterangan') {
+                                tanpaKeteranganCount[key] = (tanpaKeteranganCount[key] || 0) + 1;
+                            }
+                        });
+                    });
+                });
+            });
+
+            // Persiapkan data untuk grafik izin
+            const izinLabels = Object.keys(izinCount).slice(0, 10); // Batasi ke 10 teratas
+            const izinData = izinLabels.map(label => izinCount[label] || 0);
+
+            const izinChart = new Chart(document.getElementById('izinChart'), {
+                type: 'bar',
+                data: {
+                    labels: izinLabels,
+                    datasets: [{
+                        label: 'Jumlah Izin',
+                        data: izinData,
+                        backgroundColor: '#28a745',
+                        borderColor: '#218838',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Jumlah Izin'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Nama (Kelompok)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+
+            // Persiapkan data untuk grafik tanpa keterangan
+            const tanpaKeteranganLabels = Object.keys(tanpaKeteranganCount).slice(0, 10); // Batasi ke 10 teratas
+            const tanpaKeteranganData = tanpaKeteranganLabels.map(label => tanpaKeteranganCount[label] || 0);
+
+            const tanpaKeteranganChart = new Chart(document.getElementById('tanpaKeteranganChart'), {
+                type: 'bar',
+                data: {
+                    labels: tanpaKeteranganLabels,
+                    datasets: [{
+                        label: 'Jumlah Tidak Hadir Tanpa Keterangan',
+                        data: tanpaKeteranganData,
+                        backgroundColor: '#dc3545',
+                        borderColor: '#c82333',
+                        borderWidth: 1
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    scales: {
+                        y: {
+                            beginAtZero: true,
+                            title: {
+                                display: true,
+                                text: 'Jumlah Tidak Hadir'
+                            }
+                        },
+                        x: {
+                            title: {
+                                display: true,
+                                text: 'Nama (Kelompok)'
+                            }
+                        }
+                    },
+                    plugins: {
+                        legend: {
+                            display: false
+                        }
+                    }
+                }
+            });
+        }
+
+        function clearHistory() {
+            if (confirm('Apakah Anda yakin ingin menghapus semua riwayat absensi?')) {
+                localStorage.removeItem('attendanceHistory');
+                displayHistory();
+                displayFilterTable();
+                displayCharts();
+                alert('Semua riwayat absensi telah dihapus.');
+            }
+        }
+
+        // Panggil fungsi saat halaman dimuat
+        window.onload = () => {
+            displayHistory();
+            displayFilterTable();
+            displayCharts();
+        };
+    </script>
+</body>
+</html>
